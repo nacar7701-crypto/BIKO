@@ -15,7 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 
 // 1. IMPORTAR EL VIEWMODEL Y EL MODEL
 import { useAuthViewModel } from '../viewmodels/AuthViewModel';
-import { RegisterData } from '../models/User';
+import { RegisterData } from '../models/User'; // Asegúrate de que esta interfaz exista
 
 const RegisterScreen = () => {
   const navigation = useNavigation();
@@ -25,7 +25,7 @@ const RegisterScreen = () => {
   
   // 3. Unificar el estado de los datos del formulario
   const [formData, setFormData] = useState<RegisterData>({
-    displayName: '', // Usamos 'displayName' para ser consistentes con el modelo
+    displayName: '', 
     email: '',
     password: '',
   });
@@ -56,15 +56,14 @@ const RegisterScreen = () => {
       // 5. LLAMADA AL VIEWMODEL para la lógica de Firebase
       await registerUser(formData);
       
-      Alert.alert('¡Éxito!', 'Cuenta creada correctamente. ¡Bienvenido a Biko!');
-      // Redirigir a la pantalla principal (o donde sea lógico después del registro)
+      Alert.alert('¡Éxito!', 'Cuenta creada correctamente. ¡Inicia sesión para empezar!');
+      // Redirigir al Login después de un registro exitoso
       navigation.navigate('Login' as never); 
       
     } catch (error: any) {
       console.error("Error de registro:", error.message);
       
-      // Mostrar el mensaje de error de Firebase al usuario
-      // Por ejemplo, "auth/email-already-in-use" -> "El email ya está en uso."
+      // Muestra un mensaje de error limpio al usuario
       const errorMessage = error.message || 'Error desconocido al registrar.';
       Alert.alert('Error de Registro', errorMessage);
       
@@ -72,7 +71,6 @@ const RegisterScreen = () => {
       setLoading(false); // Finaliza el estado de carga
     }
   };
-
 
   return (
     <ImageBackground
@@ -97,13 +95,13 @@ const RegisterScreen = () => {
               style={styles.input}
               placeholder="Nombre Completo"
               value={formData.displayName}
-              onChangeText={(text) => handleInputChange('displayName', text)} // Conectado al estado
+              onChangeText={(text) => handleInputChange('displayName', text)} 
             />
             <TextInput
               style={styles.input}
               placeholder="Email"
               value={formData.email}
-              onChangeText={(text) => handleInputChange('email', text)} // Conectado al estado
+              onChangeText={(text) => handleInputChange('email', text)} 
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -111,21 +109,21 @@ const RegisterScreen = () => {
               style={styles.input}
               placeholder="Contraseña"
               value={formData.password}
-              onChangeText={(text) => handleInputChange('password', text)} // Conectado al estado
+              onChangeText={(text) => handleInputChange('password', text)} 
               secureTextEntry
             />
           </View>
 
-          {/* Botón Register */}
+          {/* Botón Register (con lógica de carga) */}
           <TouchableOpacity 
             style={styles.buttonPrimary} 
-            onPress={handleRegister} // <--- LLAMADA A LA FUNCIÓN DE REGISTRO
-            disabled={loading} // Deshabilita el botón mientras carga
+            onPress={handleRegister} 
+            disabled={loading} 
           >
-             {loading ? (
-                <ActivityIndicator color="#FFFFFF" /> // Muestra el indicador si está cargando
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" /> 
             ) : (
-                <Text style={styles.buttonText}>Crear Cuenta</Text>
+              <Text style={styles.buttonText}>Crear Cuenta</Text>
             )}
           </TouchableOpacity>
 
@@ -138,10 +136,10 @@ const RegisterScreen = () => {
             </Text>
           </TouchableOpacity>
 
-          {/* Skip para testing */}
+          {/* Skip para testing (Recuerda actualizar el nombre a MapScreen si cambias la navegación) */}
           <TouchableOpacity
             style={styles.buttonSkip}
-            onPress={() => navigation.navigate('BikeList' as never)}
+            onPress={() => navigation.navigate('MapScreen' as never)}
           >
             <Text style={styles.buttonSkipText}>Saltar</Text>
           </TouchableOpacity>
@@ -151,70 +149,70 @@ const RegisterScreen = () => {
   );
 };
 
-// ... (Tus estilos permanecen igual, no se necesita ajuste aquí)
+// --- Estilos ---
 const styles = StyleSheet.create({
-    background: { flex: 1 },
-    container: { flex: 1 },
-    overlay: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-        backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    },
-    logo: {
-        fontSize: 40,
-        fontWeight: 'bold',
-        color: '#4CAF50',
-        marginBottom: 30,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#2196F3',
-        marginBottom: 30,
-    },
-    inputContainer: {
-        width: '100%',
-        marginBottom: 20,
-    },
-    input: {
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        padding: 15,
-        borderRadius: 10,
-        marginBottom: 15,
-        fontSize: 16,
-        color: '#333',
-    },
-    buttonPrimary: {
-        backgroundColor: '#4CAF50',
-        paddingHorizontal: 50,
-        paddingVertical: 15,
-        borderRadius: 25,
-        marginBottom: 20,
-        width: '80%',
-        alignItems: 'center',
-    },
-    buttonText: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    linkText: {
-        color: '#2196F3',
-        fontSize: 16,
-        marginBottom: 20,
-    },
-    buttonSkip: {
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 20,
-    },
-    buttonSkipText: {
-        color: 'white',
-        fontSize: 14,
-    },
+  background: { flex: 1 },
+  container: { flex: 1 },
+  overlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  logo: {
+    fontSize: 40,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+    marginBottom: 30,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2196F3',
+    marginBottom: 30,
+  },
+  inputContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  input: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+    fontSize: 16,
+    color: '#333',
+  },
+  buttonPrimary: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 50,
+    paddingVertical: 15,
+    borderRadius: 25,
+    marginBottom: 20,
+    width: '80%',
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  linkText: {
+    color: '#2196F3',
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  buttonSkip: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  buttonSkipText: {
+    color: 'white',
+    fontSize: 14,
+  },
 });
 
 export default RegisterScreen;
