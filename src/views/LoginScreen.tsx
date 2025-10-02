@@ -1,202 +1,300 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  ImageBackground,
   TextInput,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert, // Importado para mostrar alertas
-  ActivityIndicator, // Importado para el estado de carga
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  Alert
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { auth } from '../services/firebase';
+import { Ionicons } from '@expo/vector-icons';
 
-// 1. IMPORTAR EL VIEWMODEL
-import { useAuthViewModel } from '../viewmodels/AuthViewModel'; 
+// --- Define tu RootStackParamList según tus screens ---
+type RootStackParamList = {
+  LoginScreen: undefined;
+  Register: undefined;
+  HomeScreen: undefined;
+  MapScreen: undefined;
+};
+
+type LoginScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'LoginScreen'
+>;
+
+const { height, width } = Dimensions.get('window');
+
+const COLORS = {
+  DARK_BG: '#102D15',
+  MEDIUM_GREEN: '#3B6528',
+  LIGHT_ACCENT: '#C0FFC0',
+  PRIMARY_FILL: '#86F97A',
+  PRIMARY_TEXT: '#102D15',
+  CARD_BG: '#FFFFFF',
+  FORM_TEXT_DARK: '#333333',
+};
 
 const LoginScreen = () => {
-  const navigation = useNavigation();
-  
-  // 2. USAR EL VIEWMODEL
-  const { loginUser } = useAuthViewModel();
-  
+  const navigation = useNavigation<LoginScreenNavigationProp>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false); // Estado para el indicador de carga
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // 3. FUNCIÓN PARA MANEJAR EL LOGIN
-  const handleLogin = async () => {
-    
-    if (!email || !password) {
-      Alert.alert('Error', 'Por favor, ingrese su email y contraseña.');
-      return;
-    }
-
-    setLoading(true); // Inicia el estado de carga
-    
-    try {
-      // LLAMADA AL VIEWMODEL
-      const user = await loginUser({ email, password });
-      
-      // Éxito: El App.tsx detectará el cambio y navegará automáticamente.
-      Alert.alert('¡Bienvenido!', `Sesión iniciada como ${user.email}`);
-      
-    } catch (error: any) {
-      console.error("Error de login:", error.message);
-      
-      // Mapeo de errores comunes para el usuario
-      let message = 'Error desconocido al iniciar sesión.';
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
-          message = 'Credenciales inválidas. Email o contraseña incorrectos.';
-      } else if (error.code === 'auth/invalid-email') {
-          message = 'El formato del correo electrónico no es válido.';
-      } else {
-          message = error.message; 
+  // Mantener sesión activa si ya hay token
+  useEffect(() => {
+    const checkSession = async () => {
+      const token = await AsyncStorage.getItem('userToken');
+      if (token) {
+        // Si hay token, reemplazar stack a MapScreen
+        navigation.replace('MapScreen');
       }
-      
-      Alert.alert('Error de Login', message);
-      
-    } finally {
-      setLoading(false); // Finaliza el estado de carga
+    };
+    checkSession();
+  }, []);
+
+  const handleLogin = async () => {
+  setErrorMessage('');
+  if (!email || !password) {
+    setErrorMessage('Por favor, ingrese su email y contraseña.');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    // Iniciar sesión con Firebase Auth
+    await signInWithEmailAndPassword(auth, email, password);
+
+    // Obtener token JWT de Firebase
+    const idToken = await auth.currentUser?.getIdToken(true); // true fuerza refresco
+
+    // Guardar token en AsyncStorage para sesión persistente
+    if (idToken) {
+      await AsyncStorage.setItem('userToken', idToken);
     }
-  };
+
+    Alert.alert(
+      "Inicio de sesión exitoso",
+      `Bienvenido ${auth.currentUser?.displayName || auth.currentUser?.email}!`,
+      [
+        {
+          text: "OK",
+       onPress: () => navigation.replace('MapScreen'),
+        }
+      ]
+    );
+
+  } catch (error: any) {
+    console.error('Error de inicio de sesión:', error.message);
+    setErrorMessage('Credenciales incorrectas. Inténtalo de nuevo.');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
-    <ImageBackground
-      source={require('../../assets/images/background.jpg')}
-      style={styles.background}
-      resizeMode="cover"
-    >
+    <View style={styles.background}>
+      {/* Abstract Shapes */}
+      <View style={[styles.abstractShape, styles.fluidWave]} />
+      <View style={[styles.abstractShape, styles.litSphere]} />
+      <View style={[styles.abstractShape, styles.bottomAccent]} />
+
+      {/* Logo flotante */}
+      <Image 
+        source={require('../../assets/images/logo.png')} 
+        style={styles.logoCircle} 
+        resizeMode="contain" 
+      />
+
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.overlay}>
-          {/* Logo */}
-          <Text style={styles.logo}>Biko</Text>
+        <View style={styles.cardContainer}>
+          <Text style={styles.title}>¡Bienvenido de nuevo!</Text>
+          <Text style={styles.description}>
+            Introduce tus credenciales para acceder a tu cuenta.
+          </Text>
 
-          {/* Título */}
-          <Text style={styles.title}>Iniciar Sesión</Text>
-
-          {/* Form */}
           <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Contraseña"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            {/* Email */}
+            <View style={styles.inputWrapper}>
+              <Ionicons name="mail-outline" size={20} color="#888" style={styles.icon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                placeholder="Email"
+                placeholderTextColor="#888"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            {/* Contraseña */}
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={20} color="#888" style={styles.icon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                placeholder="Contraseña"
+                placeholderTextColor="#888"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeIcon}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                  size={20}
+                  color="#888"
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {/* Botón Login (con lógica de carga) */}
-          <TouchableOpacity 
+          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+          <TouchableOpacity
             style={styles.buttonPrimary}
-            onPress={handleLogin} // <-- CONECTADO
-            disabled={loading} // Deshabilitado durante la carga
+            onPress={handleLogin}
+            disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" /> // Muestra indicador si está cargando
+              <ActivityIndicator color={COLORS.PRIMARY_TEXT} />
             ) : (
               <Text style={styles.buttonText}>Ingresar</Text>
             )}
           </TouchableOpacity>
 
-          {/* Link a Register */}
           <TouchableOpacity
-            onPress={() => navigation.navigate('Register' as never)}
+            onPress={() => navigation.navigate('Register')}
           >
-            <Text style={styles.linkText}>
-              ¿No tienes cuenta? Regístrate aquí
-            </Text>
-          </TouchableOpacity>
-
-          {/* Skip para testing (Recuerda que esto navega a una pantalla en el AppStack, úsalo con cuidado) */}
-          <TouchableOpacity
-            style={styles.buttonSkip}
-            onPress={() => navigation.navigate('MapScreen' as never)}
-          >
-            <Text style={styles.buttonSkipText}>Saltar</Text>
+            <Text style={styles.linkText}>¿No tienes cuenta? Regístrate</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </ImageBackground>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  container: { flex: 1 },
-  overlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Overlay más oscuro para forms
+  background: { flex: 1, backgroundColor: COLORS.DARK_BG },
+  container: { flex: 1, justifyContent: 'flex-end', alignItems: 'center' },
+  abstractShape: { position: 'absolute', borderRadius: 9999 },
+  fluidWave: {
+    width: width * 1.5,
+    height: height * 1.5,
+    top: -height * 0.5,
+    left: -width * 0.5,
+    backgroundColor: COLORS.MEDIUM_GREEN,
+    opacity: 0.7,
   },
-  logo: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: '#4CAF50', // Verde
-    marginBottom: 30,
+  litSphere: {
+    width: 140,
+    height: 140,
+    top: height * 0.10,
+    right: 40,
+    backgroundColor: COLORS.LIGHT_ACCENT,
+    opacity: 0.9,
+    shadowColor: COLORS.LIGHT_ACCENT,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 15,
+    elevation: 20,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2196F3', // Azul
-    marginBottom: 30,
+  bottomAccent: {
+    width: width * 0.7,
+    height: height * 0.5,
+    bottom: height * 0.1,
+    left: -width * 0.2,
+    backgroundColor: COLORS.MEDIUM_GREEN,
+    opacity: 0.4,
   },
-  inputContainer: {
+  logoCircle: {
+    position: 'absolute',
+    top: height * 0.15 - 25,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: COLORS.MEDIUM_GREEN,
+    zIndex: 10,
+    borderWidth: 5,
+    borderColor: COLORS.CARD_BG,
+    elevation: 15,
+    shadowColor: COLORS.LIGHT_ACCENT,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 10,
+    left: (width / 2) - 75,
+  },
+  cardContainer: {
     width: '100%',
-    marginBottom: 20,
+    minHeight: height * 0.6,
+    backgroundColor: COLORS.CARD_BG,
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40,
+    paddingHorizontal: 30,
+    paddingTop: 70,
+    paddingBottom: 40,
+    alignItems: 'center',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
   },
-  input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 15,
-    borderRadius: 10,
+  title: { fontSize: 32, fontWeight: 'bold', color: COLORS.FORM_TEXT_DARK, marginBottom: 10 },
+  description: { fontSize: 16, color: COLORS.FORM_TEXT_DARK, textAlign: 'center', marginBottom: 40, opacity: 0.6 },
+  inputContainer: { width: '100%', marginBottom: 20 },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
     marginBottom: 15,
-    fontSize: 16,
-    color: '#333',
+    paddingHorizontal: 10,
   },
+  inputWithIcon: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 5,
+    fontSize: 16,
+    color: COLORS.FORM_TEXT_DARK,
+  },
+  icon: { marginRight: 8 },
+  eyeIcon: { padding: 5 },
+  errorText: { color: 'red', marginBottom: 15, fontSize: 14 },
   buttonPrimary: {
-    backgroundColor: '#4CAF50', // Verde
+    backgroundColor: COLORS.PRIMARY_FILL,
     paddingHorizontal: 50,
     paddingVertical: 15,
-    borderRadius: 25,
+    borderRadius: 15,
     marginBottom: 20,
-    width: '80%',
+    width: '100%',
     alignItems: 'center',
+    elevation: 8,
+    shadowColor: COLORS.PRIMARY_FILL,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
   },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  linkText: {
-    color: '#2196F3', // Azul
-    fontSize: 16,
-    marginBottom: 20,
-  },
-  buttonSkip: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  buttonSkipText: {
-    color: 'white',
-    fontSize: 14,
-  },
+  buttonText: { color: COLORS.PRIMARY_TEXT, fontSize: 18, fontWeight: 'bold' },
+  linkText: { color: COLORS.MEDIUM_GREEN, fontSize: 16, marginTop: 10, textDecorationLine: 'underline' },
 });
 
 export default LoginScreen;

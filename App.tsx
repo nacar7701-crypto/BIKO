@@ -2,6 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
+
 import WelcomeScreen from './src/views/WelcomeScreen';
 import LoginScreen from './src/views/LoginScreen';
 import RegisterScreen from './src/views/RegisterScreen';
@@ -10,27 +11,27 @@ import { useAuthStatus } from './src/viewmodels/useAuthStatus';
 
 const Stack = createNativeStackNavigator();
 
+// --- Stack para autenticación (Welcome → Login → Register) ---
 const AuthStack = () => (
-  <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
+  <Stack.Navigator initialRouteName="Welcome" screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Welcome" component={WelcomeScreen} />
     <Stack.Screen name="Login" component={LoginScreen} />
     <Stack.Screen name="Register" component={RegisterScreen} />
   </Stack.Navigator>
 );
 
+// --- Stack para usuario logueado (MapScreen y futuras pantallas) ---
 const AppStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
-    {/* La pantalla principal después del Login */}
     <Stack.Screen name="MapScreen" component={MapScreen} /> 
-    {/* Aquí irían otras pantallas de la app, como Perfil, etc. */}
+    {/* Aquí podrías agregar Perfil, Configuración, etc. */}
   </Stack.Navigator>
 );
-
 
 export default function App() {
   const { user, isLoading } = useAuthStatus();
 
-  // Muestra un indicador de carga mientras Firebase verifica la sesión (es muy rápido)
+  // Indicador de carga mientras Firebase verifica la sesión
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -42,7 +43,7 @@ export default function App() {
 
   return (
     <NavigationContainer>
-      {/* Si hay un usuario logueado, muestra el AppStack (Mapa). Si no, el AuthStack. */}
+      {/* Si hay un usuario logueado, muestra AppStack; si no, AuthStack */}
       {user ? <AppStack /> : <AuthStack />}
     </NavigationContainer>
   );
@@ -61,26 +62,3 @@ const styles = StyleSheet.create({
     color: '#333'
   }
 });
-
-    //<Provider bikeViewModel={bikeViewModel}>
-      <NavigationContainer>
-        <Stack.Navigator initialRouteName="Welcome">
-          <Stack.Screen
-            name="Welcome"
-            component={WelcomeScreen}
-            options={{ headerShown: false }} // Oculta header en bienvenida
-          />
-          <Stack.Screen
-            name="Login"
-            component={LoginScreen}
-            options={{ title: 'Login', headerStyle: { backgroundColor: '#4CAF50' } }}
-          />
-          <Stack.Screen
-            name="Register"
-            component={RegisterScreen}
-            options={{ title: 'Registro', headerStyle: { backgroundColor: '#4CAF50' } }}
-          />
-        </Stack.Navigator>
-      </NavigationContainer>
-    //</Provider>
-
