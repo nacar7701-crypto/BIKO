@@ -12,6 +12,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Station } from '../models/BikeStation';
 import { AppStackParamList } from '../models/navigation';
 import { useAuthStatus } from '../viewmodels/useAuthStatus';
+import { useLogout } from '../viewmodels/useLogout';
 
 const { height } = Dimensions.get('window');
 type MapScreenNavigationProp = NativeStackNavigationProp<AppStackParamList, 'Map'>;
@@ -139,6 +140,7 @@ const StationDetailPanel: React.FC<{
 const MapScreen = () => {
   const navigation = useNavigation<MapScreenNavigationProp>();
   const { user: currentUser, isLoading } = useAuthStatus();
+  const { logout } = useLogout(navigation);
   const [userName, setUserName] = useState<string>('Usuario');
 
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
@@ -146,8 +148,9 @@ const MapScreen = () => {
   const [stations, setStations] = useState<Station[]>([]);
   const [activeReservation, setActiveReservation] = useState<any>(null);
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
-  const [userLocation, setUserLocation] = useState<{latitude:number,longitude:number}|null>(null);
-  const [sortType, setSortType] = useState<'distance'|'bikes'|'ports'|'none'>('none');
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [sortType, setSortType] = useState<'distance' | 'bikes' | 'ports' | 'none'>('none');
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const navigateTo = (screenName: keyof AppStackParamList) => navigation.navigate(screenName);
 
@@ -202,8 +205,8 @@ const MapScreen = () => {
 
     const fetchActiveReservation = async () => {
       const q = query(collection(db, 'reservations'),
-        where('userId','==',currentUser.uid),
-        where('status','==','active')
+        where('userId', '==', currentUser.uid),
+        where('status', '==', 'active')
       );
       const snapshot = await getDocs(q);
       if (!snapshot.empty) setActiveReservation({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
@@ -241,7 +244,7 @@ const MapScreen = () => {
         const sec = Math.floor((diff % 60000) / 1000);
         setTimeLeft(`${min}m ${sec}s`);
       }
-    },1000);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [activeReservation]);
@@ -252,11 +255,9 @@ const MapScreen = () => {
     try {
       const estimatedCost = minutes * 0.5;
 
-      // Bloquear bici en la BD
-      await updateDoc(doc(db,'stations',station.id), { bikesAvailable: station.bikesAvailable-1 });
+      await updateDoc(doc(db, 'stations', station.id), { bikesAvailable: station.bikesAvailable - 1 });
 
-      // Crear reserva
-      const reservationRef = await addDoc(collection(db,'reservations'),{
+      const reservationRef = await addDoc(collection(db, 'reservations'), {
         userId: currentUser.uid,
         stationId: station.id,
         stationName: station.name,
@@ -266,7 +267,6 @@ const MapScreen = () => {
         estimatedCost
       });
 
-      // Actualizar estado local y mostrar resumen
       setActiveReservation({ id: reservationRef.id, stationName: station.name, minutes, estimatedCost, startTime: new Date() });
       setSelectedStation(null);
 
@@ -274,17 +274,17 @@ const MapScreen = () => {
         "Reserva confirmada",
         `Bicicleta reservada en ${station.name} por ${minutes} minutos. Costo estimado: $${estimatedCost.toFixed(2)}`
       );
-    } catch(e){ console.error(e); }
+    } catch (e) { console.error(e); }
   };
 
   // --------- FILTRADO Y ORDENAMIENTO ---------
   const filteredStations = useMemo(() => {
     let filtered = stations.filter(s => s.name?.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    if (sortType === 'bikes') filtered.sort((a,b) => b.bikesAvailable - a.bikesAvailable);
-    else if (sortType === 'ports') filtered.sort((a,b) => b.portsAvailable - a.portsAvailable);
+    if (sortType === 'bikes') filtered.sort((a, b) => b.bikesAvailable - a.bikesAvailable);
+    else if (sortType === 'ports') filtered.sort((a, b) => b.portsAvailable - a.portsAvailable);
     else if (sortType === 'distance' && userLocation) {
-      filtered.sort((a,b) => {
+      filtered.sort((a, b) => {
         const distA = Math.hypot(a.latitude - userLocation.latitude, a.longitude - userLocation.longitude);
         const distB = Math.hypot(b.latitude - userLocation.latitude, b.longitude - userLocation.longitude);
         return distA - distB;
@@ -297,32 +297,105 @@ const MapScreen = () => {
   return (
     <View style={styles.fullContainer}>
       <View style={styles.mapContainer}>
-        <MapView style={styles.mapInner} initialRegion={INITIAL_REGION} showsUserLocation onPress={()=>setSelectedStation(null)}>
-          {filteredStations.map(station => <CustomBikeMarker key={station.id} station={station} onPress={setSelectedStation} />)}
+        <MapView
+          style={styles.mapInner}
+          initialRegion={INITIAL_REGION}
+          showsUserLocation
+          onPress={() => {
+            // Cierra solo el menú de perfil, no el panel de estación
+            setShowProfileMenu(false);
+          }}
+        >
+          {filteredStations.map(station => (
+            <CustomBikeMarker
+              key={station.id}
+              station={station}
+              onPress={(station) => {
+                setSelectedStation(station);
+                setShowProfileMenu(false);
+              }}
+            />
+          ))}
         </MapView>
       </View>
 
       {/* Barra superior */}
       <View style={styles.searchContainer}>
-        <TouchableOpacity style={styles.menuButton} onPress={()=>navigateTo('Profile')}><Ionicons name="person-circle-outline" size={30} color={COLORS.PRIMARY_FILL}/></TouchableOpacity>
-        <TouchableOpacity style={styles.menuButton} onPress={()=>navigateTo('History')}><Ionicons name="list-circle-outline" size={30} color={COLORS.PRIMARY_FILL}/></TouchableOpacity>
-        <TouchableOpacity style={styles.menuButton} onPress={()=>navigateTo('Report')}><Ionicons name="alert-circle-outline" size={30} color={COLORS.PRIMARY_FILL}/></TouchableOpacity>
+        {/* Menú de perfil con dropdown posicionado correctamente */}
+        <View style={{ position: 'relative' }}>
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={() => setShowProfileMenu(!showProfileMenu)}
+          >
+            <Ionicons name="person-circle-outline" size={30} color={COLORS.PRIMARY_FILL} />
+          </TouchableOpacity>
+
+          {showProfileMenu && (
+            <View style={styles.profileMenu}>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  navigateTo('Account');
+                  setShowProfileMenu(false);
+                }}
+              >
+                <Text style={styles.menuItemText}>Cuenta</Text>
+              </TouchableOpacity>
+              <View style={styles.menuDivider} />
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowProfileMenu(false);
+                  logout();
+                }}
+              >
+                <Text style={styles.menuItemText}>Cerrar sesión</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <TouchableOpacity style={styles.menuButton} onPress={() => navigateTo('History')}>
+          <Ionicons name="list-circle-outline" size={30} color={COLORS.PRIMARY_FILL} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.menuButton} onPress={() => navigateTo('Report')}>
+          <Ionicons name="alert-circle-outline" size={30} color={COLORS.PRIMARY_FILL} />
+        </TouchableOpacity>
         <View style={styles.searchInputWrapper}>
-          <Ionicons name="search" size={20} color="#999" style={styles.searchIcon}/>
-          <TextInput style={styles.searchInput} placeholder="Buscar estación..." placeholderTextColor="#999" value={searchQuery} onChangeText={setSearchQuery}/>
+          <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar estación..."
+            placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
         </View>
       </View>
 
-      {/* Botones filtro */}
-      <View style={{flexDirection:'row', position:'absolute', top:110, left:10, right:10, zIndex:10}}>
-        <TouchableOpacity onPress={()=>setSortType('bikes')} style={{marginRight:10,backgroundColor:COLORS.PRIMARY_FILL,padding:8,borderRadius:10}}><Text>Más bicis</Text></TouchableOpacity>
-        <TouchableOpacity onPress={()=>setSortType('ports')} style={{marginRight:10,backgroundColor:COLORS.PRIMARY_FILL,padding:8,borderRadius:10}}><Text>Más puertos</Text></TouchableOpacity>
-        <TouchableOpacity onPress={()=>setSortType('distance')} style={{marginRight:10,backgroundColor:COLORS.PRIMARY_FILL,padding:8,borderRadius:10}}><Text>Cercanas</Text></TouchableOpacity>
-        <TouchableOpacity onPress={()=>setSortType('none')} style={{backgroundColor:COLORS.PRIMARY_FILL,padding:8,borderRadius:10}}><Text>Default</Text></TouchableOpacity>
+      {/* Botones de filtro */}
+      <View style={styles.filterButtonsContainer}>
+        <TouchableOpacity onPress={() => setSortType('bikes')} style={styles.filterButton}>
+          <Text>Más bicis</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setSortType('ports')} style={styles.filterButton}>
+          <Text>Más puertos</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setSortType('distance')} style={styles.filterButton}>
+          <Text>Cercanas</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setSortType('none')} style={styles.filterButton}>
+          <Text>Default</Text>
+        </TouchableOpacity>
       </View>
 
       {selectedStation ? (
-        <StationDetailPanel station={selectedStation} onClose={()=>setSelectedStation(null)} onReserve={handleReserve} isReservationActive={!!activeReservation}/>
+        <StationDetailPanel
+          station={selectedStation}
+          onClose={() => setSelectedStation(null)}
+          onReserve={handleReserve}
+          isReservationActive={!!activeReservation}
+        />
       ) : (
         <View style={styles.bottomPanel}>
           {activeReservation ? (
@@ -344,32 +417,159 @@ const MapScreen = () => {
 // ---------------------- ESTILOS ----------------------
 const styles = StyleSheet.create({
   fullContainer: { flex: 1, backgroundColor: COLORS.DARK_BG },
-  mapContainer: { ...StyleSheet.absoluteFillObject, marginBottom: height/4 },
+  mapContainer: { ...StyleSheet.absoluteFillObject, marginBottom: height / 4 },
   mapInner: { ...StyleSheet.absoluteFillObject },
-  searchContainer: { position:'absolute', top:55, left:10, right:10, flexDirection:'row', alignItems:'center', zIndex:10 },
-  menuButton: { padding:8, backgroundColor:COLORS.CARD_BG, borderRadius:12, marginRight:10, elevation:6 },
-  searchInputWrapper: { flex:1, flexDirection:'row', alignItems:'center', backgroundColor:COLORS.CARD_BG, borderRadius:12, paddingHorizontal:10, height:50, elevation:6 },
-  searchIcon:{ marginRight:8 },
-  searchInput:{ flex:1, fontSize:16, color:COLORS.FORM_TEXT_DARK },
-  markerContainer:{ flexDirection:'row', paddingHorizontal:8, paddingVertical:4, borderRadius:20, justifyContent:'center', alignItems:'center', borderColor:'#FFF', borderWidth:1.5, elevation:3 },
-  markerText:{ fontWeight:'bold', fontSize:16, marginLeft:2 },
-  bottomPanel:{ position:'absolute', bottom:0, left:0, right:0, height:height/4, backgroundColor:COLORS.MEDIUM_GREEN, padding:20, borderTopLeftRadius:20, borderTopRightRadius:20, elevation:10 },
-  greetingText:{ fontSize:18, color:COLORS.LIGHT_ACCENT, marginBottom:5 },
-  actionText:{ fontSize:22, fontWeight:'bold', color:COLORS.CARD_BG, marginBottom:10 },
-  infoText:{ color:COLORS.CARD_BG, fontSize:16 },
-  detailPanel:{ position:'absolute', bottom:0, left:0, right:0, backgroundColor:COLORS.CARD_BG, borderTopLeftRadius:20, borderTopRightRadius:20, maxHeight:'65%', elevation:10 },
-  panelScrollContent:{ padding:20, paddingTop:10 },
-  closeButton:{ position:'absolute', top:10, right:10 },
-  stationTitle:{ fontSize:22, fontWeight:'bold', marginTop:15, marginBottom:20, color:COLORS.FORM_TEXT_DARK },
-  metricsContainer:{ flexDirection:'row', justifyContent:'space-between', paddingBottom:20, borderBottomWidth:1, borderBottomColor:'#EEE', marginBottom:20 },
-  metricItem:{ alignItems:'center', flex:1 },
-  metricValue:{ fontSize:32, fontWeight:'bold', color:COLORS.FORM_TEXT_DARK },
-  metricLabel:{ fontSize:14, color:'#666' },
-  metricDivider:{ width:1, backgroundColor:'#DDD', marginHorizontal:15 },
-  timeInput:{ borderWidth:1, borderColor:'#CCC', borderRadius:10, padding:10, color:COLORS.FORM_TEXT_DARK },
-  costText:{ fontSize:16, color:COLORS.DARK_GREEN, marginBottom:15, fontWeight:'600' },
-  unlockButton:{ backgroundColor:COLORS.PRIMARY_FILL, padding:15, borderRadius:15, alignItems:'center', marginBottom:20 },
-  unlockButtonText:{ color:COLORS.PRIMARY_TEXT, fontSize:18, fontWeight:'bold' },
+  searchContainer: {
+    position: 'absolute',
+    top: 55,
+    left: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  menuButton: {
+    padding: 8,
+    backgroundColor: COLORS.CARD_BG,
+    borderRadius: 12,
+    marginRight: 10,
+    elevation: 6,
+  },
+  searchInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.CARD_BG,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    height: 50,
+    elevation: 6,
+  },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 16, color: COLORS.FORM_TEXT_DARK },
+  markerContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderColor: '#FFF',
+    borderWidth: 1.5,
+    elevation: 3,
+  },
+  markerText: { fontWeight: 'bold', fontSize: 16, marginLeft: 2 },
+  bottomPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: height / 4,
+    backgroundColor: COLORS.MEDIUM_GREEN,
+    padding: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    elevation: 10,
+  },
+  actionText: { fontSize: 22, fontWeight: 'bold', color: COLORS.CARD_BG, marginBottom: 10 },
+  infoText: { color: COLORS.CARD_BG, fontSize: 16 },
+  detailPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.CARD_BG,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '65%',
+    elevation: 10,
+  },
+  panelScrollContent: { padding: 20, paddingTop: 10 },
+  closeButton: { position: 'absolute', top: 10, right: 10 },
+  stationTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginTop: 15,
+    marginBottom: 20,
+    color: COLORS.FORM_TEXT_DARK,
+  },
+  metricsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+    marginBottom: 20,
+  },
+  metricItem: { alignItems: 'center', flex: 1 },
+  metricValue: { fontSize: 32, fontWeight: 'bold', color: COLORS.FORM_TEXT_DARK },
+  metricLabel: { fontSize: 14, color: '#666' },
+  metricDivider: { width: 1, backgroundColor: '#DDD', marginHorizontal: 15 },
+  timeInput: {
+    borderWidth: 1,
+    borderColor: '#CCC',
+    borderRadius: 10,
+    padding: 10,
+    color: COLORS.FORM_TEXT_DARK,
+  },
+  costText: { fontSize: 16, color: COLORS.DARK_GREEN, marginBottom: 15, fontWeight: '600' },
+  unlockButton: {
+    backgroundColor: COLORS.PRIMARY_FILL,
+    padding: 15,
+    borderRadius: 15,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  unlockButtonText: { color: COLORS.PRIMARY_TEXT, fontSize: 18, fontWeight: 'bold' },
+
+  // Botones de filtro
+  filterButtonsContainer: {
+    flexDirection: 'row',
+    position: 'absolute',
+    top: 110,
+    left: 10,
+    right: 10,
+    zIndex: 10,
+  },
+  filterButton: {
+    marginRight: 10,
+    backgroundColor: COLORS.PRIMARY_FILL,
+    padding: 8,
+    borderRadius: 10,
+    flex: 1,
+    alignItems: 'center',
+  },
+
+  // Menú desplegable (debajo del ícono)
+  // ... (todo igual hasta los estilos)
+
+// Menú desplegable (ahora a la izquierda del botón de perfil)
+profileMenu: {
+  position: 'absolute',
+  top: 45, // Justo debajo del botón
+  left: 0, // 👈 CORREGIDO: ahora se muestra a la izquierda (dentro de la pantalla)
+  backgroundColor: COLORS.CARD_BG,
+  borderRadius: 12,
+  elevation: 8,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.2,
+  shadowRadius: 4,
+  width: 180,
+  zIndex: 30,
+},
+  menuItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  menuItemText: {
+    fontSize: 16,
+    color: COLORS.FORM_TEXT_DARK,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#EEE',
+  },
 });
 
 export default MapScreen;
