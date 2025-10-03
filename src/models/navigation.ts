@@ -13,4 +13,5 @@ export type AppStackParamList = {
   Profile: undefined;
   History: undefined;
   Report: undefined;
+  Account: undefined;
 };
