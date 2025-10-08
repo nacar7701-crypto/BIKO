@@ -9,6 +9,7 @@ import RegisterScreen from './src/views/RegisterScreen';
 import MapScreen from './src/views/MapScreen'; 
 import { useAuthStatus } from './src/viewmodels/useAuthStatus'; 
 import AccountScreen from './src/views/AccountScreen';
+import ReportScreen from './src/views/ReportScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -19,6 +20,7 @@ const AuthStack = () => (
     <Stack.Screen name="Login" component={LoginScreen} />
     <Stack.Screen name="Register" component={RegisterScreen} />
     <Stack.Screen name="Account" component={AccountScreen} />
+    <Stack.Screen name="Report" component={ReportScreen} /> 
   </Stack.Navigator>
 );
 
@@ -27,6 +29,7 @@ const AppStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="MapScreen" component={MapScreen} />
     <Stack.Screen name="Account" component={AccountScreen} /> 
+    <Stack.Screen name="Report" component={ReportScreen} /> 
     {/* Aquí podrías agregar Perfil, Configuración, etc. */}
   </Stack.Navigator>
 );
