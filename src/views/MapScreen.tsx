@@ -1,3 +1,5 @@
+// src/views/MapScreen.tsx
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
@@ -151,6 +153,7 @@ const MapScreen = () => {
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [sortType, setSortType] = useState<'distance' | 'bikes' | 'ports' | 'none'>('none');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [mapKey, setMapKey] = useState(0); // <-- Clave para forzar re-render del mapa
 
   const navigateTo = (screenName: keyof AppStackParamList) => navigation.navigate(screenName);
 
@@ -190,7 +193,7 @@ const MapScreen = () => {
     })();
   }, []);
 
-  // --------- ESTACIONES ---------
+  // --------- ESTACIONES (sin ordenar) ---------
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'stations'), (snapshot) => {
       const stationList = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Station[];
@@ -279,30 +282,43 @@ const MapScreen = () => {
 
   // --------- FILTRADO Y ORDENAMIENTO ---------
   const filteredStations = useMemo(() => {
-    let filtered = stations.filter(s => s.name?.toLowerCase().includes(searchQuery.toLowerCase()));
+    let result = [...stations];
 
-    if (sortType === 'bikes') filtered.sort((a, b) => b.bikesAvailable - a.bikesAvailable);
-    else if (sortType === 'ports') filtered.sort((a, b) => b.portsAvailable - a.portsAvailable);
-    else if (sortType === 'distance' && userLocation) {
-      filtered.sort((a, b) => {
+    if (searchQuery) {
+      result = result.filter(s =>
+        s.name?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    if (sortType === 'bikes') {
+      result.sort((a, b) => b.bikesAvailable - a.bikesAvailable);
+    } else if (sortType === 'ports') {
+      result.sort((a, b) => b.portsAvailable - a.portsAvailable);
+    } else if (sortType === 'distance' && userLocation) {
+      result.sort((a, b) => {
         const distA = Math.hypot(a.latitude - userLocation.latitude, a.longitude - userLocation.longitude);
         const distB = Math.hypot(b.latitude - userLocation.latitude, b.longitude - userLocation.longitude);
         return distA - distB;
       });
     }
 
-    return filtered;
+    return result;
   }, [stations, searchQuery, sortType, userLocation]);
+
+  // --------- FORZAR RE-RENDER DEL MAPA AL CAMBIAR FILTRO ---------
+  useEffect(() => {
+    setMapKey(prev => prev + 1);
+  }, [sortType, searchQuery]);
 
   return (
     <View style={styles.fullContainer}>
       <View style={styles.mapContainer}>
         <MapView
+          key={mapKey} // <-- ¡Clave para forzar actualización visual!
           style={styles.mapInner}
           initialRegion={INITIAL_REGION}
           showsUserLocation
           onPress={() => {
-            // Cierra solo el menú de perfil, no el panel de estación
             setShowProfileMenu(false);
           }}
         >
@@ -321,7 +337,6 @@ const MapScreen = () => {
 
       {/* Barra superior */}
       <View style={styles.searchContainer}>
-        {/* Menú de perfil con dropdown posicionado correctamente */}
         <View style={{ position: 'relative' }}>
           <TouchableOpacity
             style={styles.menuButton}
@@ -389,6 +404,7 @@ const MapScreen = () => {
         </TouchableOpacity>
       </View>
 
+      {/* Panel inferior: siempre visible */}
       {selectedStation ? (
         <StationDetailPanel
           station={selectedStation}
@@ -398,15 +414,19 @@ const MapScreen = () => {
         />
       ) : (
         <View style={styles.bottomPanel}>
+          <Text style={styles.welcomeTextInPanel}>
+            👋 ¡Bienvenido{userName !== 'Usuario' ? `, ${userName}` : ''}!
+          </Text>
+
           {activeReservation ? (
-            <View>
+            <View style={styles.reservationInfo}>
               <Text style={styles.actionText}>Reserva activa 🚲</Text>
               <Text style={styles.infoText}>Estación: {activeReservation.stationName}</Text>
               <Text style={styles.infoText}>Tiempo restante: {timeLeft || "Calculando..."}</Text>
               <Text style={styles.infoText}>Costo: ${activeReservation.estimatedCost.toFixed(2)}</Text>
             </View>
           ) : (
-            <Text style={styles.actionText}>Escoge una bici para comenzar 🚴</Text>
+            <Text style={styles.placeholderText}>Selecciona una estación para reservar</Text>
           )}
         </View>
       )}
@@ -467,12 +487,38 @@ const styles = StyleSheet.create({
     height: height / 4,
     backgroundColor: COLORS.MEDIUM_GREEN,
     padding: 20,
+    paddingTop: 25,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     elevation: 10,
   },
-  actionText: { fontSize: 22, fontWeight: 'bold', color: COLORS.CARD_BG, marginBottom: 10 },
-  infoText: { color: COLORS.CARD_BG, fontSize: 16 },
+  welcomeTextInPanel: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.CARD_BG,
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  reservationInfo: {
+    marginTop: 10,
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: COLORS.CARD_BG,
+    textAlign: 'center',
+    opacity: 0.8,
+    marginTop: 10,
+  },
+  actionText: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    color: COLORS.CARD_BG, 
+    marginBottom: 8 
+  },
+  infoText: { 
+    color: COLORS.CARD_BG, 
+    fontSize: 14 
+  },
   detailPanel: {
     position: 'absolute',
     bottom: 0,
@@ -521,8 +567,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   unlockButtonText: { color: COLORS.PRIMARY_TEXT, fontSize: 18, fontWeight: 'bold' },
-
-  // Botones de filtro
   filterButtonsContainer: {
     flexDirection: 'row',
     position: 'absolute',
@@ -539,25 +583,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
-
-  // Menú desplegable (debajo del ícono)
-  // ... (todo igual hasta los estilos)
-
-// Menú desplegable (ahora a la izquierda del botón de perfil)
-profileMenu: {
-  position: 'absolute',
-  top: 45, // Justo debajo del botón
-  left: 0, // 👈 CORREGIDO: ahora se muestra a la izquierda (dentro de la pantalla)
-  backgroundColor: COLORS.CARD_BG,
-  borderRadius: 12,
-  elevation: 8,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.2,
-  shadowRadius: 4,
-  width: 180,
-  zIndex: 30,
-},
+  profileMenu: {
+    position: 'absolute',
+    top: 45,
+    left: 0,
+    backgroundColor: COLORS.CARD_BG,
+    borderRadius: 12,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    width: 180,
+    zIndex: 30,
+  },
   menuItem: {
     paddingVertical: 12,
     paddingHorizontal: 16,
