@@ -51,58 +51,71 @@ const LoginScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showLogo, setShowLogo] = useState(true); // Controla la visibilidad del logo
 
   // Mantener sesión activa si ya hay token
   useEffect(() => {
     const checkSession = async () => {
       const token = await AsyncStorage.getItem('userToken');
       if (token) {
-        // Si hay token, reemplazar stack a MapScreen
         navigation.replace('MapScreen');
       }
     };
     checkSession();
   }, []);
 
+  // Maneja cambios en los inputs y oculta el logo al primer carácter
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    if (showLogo && (text || password)) {
+      setShowLogo(false);
+    }
+  };
+
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    if (showLogo && (text || email)) {
+      setShowLogo(false);
+    }
+  };
+
   const handleLogin = async () => {
-  setErrorMessage('');
-  if (!email || !password) {
-    setErrorMessage('Por favor, ingrese su email y contraseña.');
-    return;
-  }
-
-  setLoading(true);
-  try {
-    // Iniciar sesión con Firebase Auth
-    await signInWithEmailAndPassword(auth, email, password);
-
-    // Obtener token JWT de Firebase
-    const idToken = await auth.currentUser?.getIdToken(true); // true fuerza refresco
-
-    // Guardar token en AsyncStorage para sesión persistente
-    if (idToken) {
-      await AsyncStorage.setItem('userToken', idToken);
+    setErrorMessage('');
+    if (!email || !password) {
+      setErrorMessage('Por favor, ingrese su email y contraseña.');
+      return;
     }
 
-    Alert.alert(
-      "Inicio de sesión exitoso",
-      `Bienvenido ${auth.currentUser?.displayName || auth.currentUser?.email}!`,
-      [
-        {
-          text: "OK",
-       onPress: () => navigation.replace('MapScreen'),
-        }
-      ]
-    );
+    setLoading(true);
+    try {
+      // Iniciar sesión con Firebase Auth
+      await signInWithEmailAndPassword(auth, email, password);
 
-  } catch (error: any) {
-    console.error('Error de inicio de sesión:', error.message);
-    setErrorMessage('Credenciales incorrectas. Inténtalo de nuevo.');
-  } finally {
-    setLoading(false);
-  }
-};
+      // Obtener token JWT de Firebase
+      const idToken = await auth.currentUser?.getIdToken(true); // true fuerza refresco
 
+      // Guardar token en AsyncStorage para sesión persistente
+      if (idToken) {
+        await AsyncStorage.setItem('userToken', idToken);
+      }
+
+      Alert.alert(
+        "Inicio de sesión exitoso",
+        `Bienvenido ${auth.currentUser?.displayName || auth.currentUser?.email}!`,
+        [
+          {
+            text: "OK",
+            onPress: () => navigation.replace('MapScreen'),
+          }
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error de inicio de sesión:', error.message);
+      setErrorMessage('Credenciales incorrectas. Inténtalo de nuevo.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.background}>
@@ -111,12 +124,14 @@ const LoginScreen = () => {
       <View style={[styles.abstractShape, styles.litSphere]} />
       <View style={[styles.abstractShape, styles.bottomAccent]} />
 
-      {/* Logo flotante */}
-      <Image 
-        source={require('../../assets/images/logo.png')} 
-        style={styles.logoCircle} 
-        resizeMode="contain" 
-      />
+      {/* Logo flotante: solo se muestra si showLogo es true */}
+      {showLogo && (
+        <Image 
+          source={require('../../assets/images/logo.png')} 
+          style={styles.logoCircle} 
+          resizeMode="contain" 
+        />
+      )}
 
       <KeyboardAvoidingView
         style={styles.container}
@@ -137,7 +152,7 @@ const LoginScreen = () => {
                 placeholder="Email"
                 placeholderTextColor="#888"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={handleEmailChange}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
@@ -151,7 +166,7 @@ const LoginScreen = () => {
                 placeholder="Contraseña"
                 placeholderTextColor="#888"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={handlePasswordChange}
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity
